@@ -1,0 +1,169 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// -------- Pin Definitions --------
+#define S0 3
+#define S1 2
+#define S2 5
+#define S3 12
+#define sensorOut 4
+
+#define LM35_PIN A1
+#define SOIL_PIN A0
+const int LDR_PIN = A2;
+
+// -------- LCD Setup --------
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// -------- Variables --------
+String colour;
+String status;
+
+int LDR_LOW_SUCROSE = 850;
+int LDR_HIGH_SUCROSE = 250;
+
+int ldrValue = 0;
+int sucrosePercent = 0;
+
+// -------- Function to Read Color --------
+unsigned long readColorAvg(bool s2, bool s3) {
+  digitalWrite(S2, s2);
+  digitalWrite(S3, s3);
+  delay(5);
+
+  unsigned long sum = 0;
+
+  for (int i = 0; i < 10; i++) {
+    unsigned long p = pulseIn(sensorOut, LOW, 30000);
+    if (p == 0) p = 30000;
+    sum += p;
+  }
+
+  return sum / 10;
+}
+
+// -------- Setup --------
+void setup() {
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(S3, OUTPUT);
+  pinMode(sensorOut, INPUT);
+
+  digitalWrite(S0, HIGH);
+  digitalWrite(S1, LOW);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+}
+
+// -------- Main Loop --------
+void loop() {
+
+  // -------- Temperature --------
+  int tempValue = analogRead(LM35_PIN);
+  float voltage = tempValue * (5.0 / 1023.0);
+  float temperature = voltage * 100.0;
+
+  // -------- Soil Moisture --------
+  int soilValue = analogRead(SOIL_PIN);
+  int moisture = map(soilValue, 1000, 300, 0, 100);
+  moisture = constrain(moisture, 0, 100);
+
+  // -------- Color Reading --------
+  unsigned long R = readColorAvg(LOW, LOW);
+  unsigned long G = readColorAvg(HIGH, HIGH);
+  unsigned long B = readColorAvg(LOW, HIGH);
+
+  if (R < G && R < B) {
+    colour = "BROWN";
+    Serial.println("BROWN detected");
+  } else if (G < R && G < B) {
+    colour = "GREEN";
+    Serial.println("GREEN detected");
+  } else {
+    colour = "UNKNOWN";
+    Serial.println("UNKNOWN color");
+  }
+
+  // -------- Status --------
+  if (colour == "BROWN" && temperature >= 25 && moisture <= 40) {
+    status = "MATURE";
+  } else {
+    status = "NOT MATURE";
+  }
+
+  // -------- LDR (Sucrose) --------
+  ldrValue = analogRead(LDR_PIN);
+
+  if (ldrValue < 400) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Place Sugarcane");
+    delay(400);
+    return;
+  }
+
+  sucrosePercent = map(ldrValue, LDR_LOW_SUCROSE, LDR_HIGH_SUCROSE, 0, 100);
+  sucrosePercent = constrain(sucrosePercent, 0, 100);
+
+  // -------- Serial Output --------
+  Serial.print("Temp: ");
+  Serial.print(temperature);
+  Serial.println(" C");
+
+  Serial.print("Moisture: ");
+  Serial.print(moisture);
+  Serial.println("%");
+
+  Serial.print("R: ");
+  Serial.print(R);
+  Serial.print(" G: ");
+  Serial.print(G);
+  Serial.print(" B: ");
+  Serial.println(B);
+
+  Serial.print("Sucrose: ");
+  Serial.print(sucrosePercent);
+  Serial.println("%");
+
+  Serial.print("Colour: ");
+  Serial.println(colour);
+
+  Serial.print("Status: ");
+  Serial.println(status);
+
+  Serial.println("------------------------");
+
+  // -------- LCD Screen 1 --------
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  lcd.print((int)temperature);
+  lcd.print("C ");
+
+  lcd.print("M:");
+  lcd.print(moisture);
+  lcd.print("%");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Suc:");
+  lcd.print(sucrosePercent);
+  lcd.print("%");
+
+  delay(2000);
+
+  // -------- LCD Screen 2 --------
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Colour:");
+  lcd.print(colour);
+
+  lcd.setCursor(0, 1);
+  lcd.print(status);
+
+  delay(1000);
+}
