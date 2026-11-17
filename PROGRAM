@@ -1,0 +1,210 @@
+
+#include <Wire.h>
+#include <SparkFun_AS726X.h>
+#include <LiquidCrystal_I2C.h>
+
+AS726X nir;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Sensor pins
+#define LDR_PIN A0
+#define MOISTURE_PIN A1
+#define LM35_PIN A2
+
+#define COLOR_S0 2
+#define COLOR_S1 3
+#define COLOR_S2 4
+#define COLOR_S3 5
+#define COLOR_OUT 6
+
+#define TRIG_PIN 7
+#define ECHO_PIN 8
+#define LASER_ENABLE 9
+
+// Calibration values: replace after testing
+// These are example values, not validated sugarcane limits.
+float NIR_MIN = 0.5;
+float NIR_MAX = 2.0;
+
+float readColor(bool s2, bool s3) {
+  digitalWrite(COLOR_S2, s2);
+  digitalWrite(COLOR_S3, s3);
+  delay(50);
+
+  unsigned long pulse = pulseIn(COLOR_OUT, LOW, 100000);
+  if (pulse == 0) return 0;
+
+  return 1000000.0 / pulse;
+}
+
+float readDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+
+  if (duration == 0) return -1;
+
+  return duration * 0.0343 / 2;
+}
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+
+  pinMode(LDR_PIN, INPUT);
+  pinMode(MOISTURE_PIN, INPUT);
+  pinMode(LM35_PIN, INPUT);
+
+  pinMode(COLOR_S0, OUTPUT);
+  pinMode(COLOR_S1, OUTPUT);
+  pinMode(COLOR_S2, OUTPUT);
+  pinMode(COLOR_S3, OUTPUT);
+  pinMode(COLOR_OUT, INPUT);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  pinMode(LASER_ENABLE, OUTPUT);
+  digitalWrite(LASER_ENABLE, LOW);
+
+  // TCS3200 frequency scaling: 20%
+  digitalWrite(COLOR_S0, HIGH);
+  digitalWrite(COLOR_S1, LOW);
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(0, 0);
+  lcd.print("SUGARCANE TEST");
+  lcd.setCursor(0, 1);
+  lcd.print("Initializing...");
+
+  if (!nir.begin()) {
+    lcd.clear();
+    lcd.print("NIR NOT FOUND");
+    Serial.println("AS7263 not detected");
+    while (1);
+  }
+
+  delay(1500);
+  lcd.clear();
+}
+
+void loop() {
+
+  // Read NIR sensor
+  nir.takeMeasurements();
+
+  float nir680 = nir.getCalibratedS();
+  float nir860 = nir.getCalibratedW();
+
+  float nirRatio = 0;
+
+  if (nir680 > 0.01) {
+    nirRatio = nir860 / nir680;
+  }
+
+  // Read colour sensor
+  float red = readColor(LOW, LOW);
+  float green = readColor(HIGH, HIGH);
+  float blue = readColor(LOW, HIGH);
+
+  // Read LDR and moisture sensor
+  int lightValue = analogRead(LDR_PIN);
+  int moistureValue = analogRead(MOISTURE_PIN);
+
+  // Read temperature using LM35
+  int tempADC = analogRead(LM35_PIN);
+  float voltage = tempADC * (5.0 / 1023.0);
+  float temperature = voltage * 100.0;
+
+  // Read ultrasonic distance
+  float distance = readDistance();
+
+  // Example normalized NIR score
+  // Must be calibrated using laboratory Brix readings.
+  float nirScore = (nirRatio - NIR_MIN) /
+                   (NIR_MAX - NIR_MIN) * 100.0;
+
+  nirScore = constrain(nirScore, 0, 100);
+
+  // Demonstration maturity score.
+  // Not a scientifically validated prediction model.
+  float maturityScore = nirScore;
+
+  String maturity;
+
+  if (maturityScore < 35) {
+    maturity = "IMMATURE";
+  }
+  else if (maturityScore < 70) {
+    maturity = "SEMI MATURE";
+  }
+  else {
+    maturity = "MATURE";
+  }
+
+  // Serial Monitor output
+  Serial.println("--------------------");
+  Serial.print("NIR 680: ");
+  Serial.println(nir680);
+
+  Serial.print("NIR 860: ");
+  Serial.println(nir860);
+
+  Serial.print("NIR Ratio: ");
+  Serial.println(nirRatio);
+
+  Serial.print("Red: ");
+  Serial.println(red);
+
+  Serial.print("Green: ");
+  Serial.println(green);
+
+  Serial.print("Blue: ");
+  Serial.println(blue);
+
+  Serial.print("LDR: ");
+  Serial.println(lightValue);
+
+  Serial.print("Moisture: ");
+  Serial.println(moistureValue);
+
+  Serial.print("Temperature: ");
+  Serial.println(temperature);
+
+  Serial.print("Distance: ");
+  Serial.println(distance);
+
+  Serial.print("Maturity Score: ");
+  Serial.println(maturityScore);
+
+  Serial.print("Maturity: ");
+  Serial.println(maturity);
+
+  // LCD display
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Maturity:");
+  lcd.setCursor(0, 1);
+  lcd.print(maturity);
+
+  delay(2000);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Index:");
+  lcd.print(maturityScore, 1);
+
+  lcd.setCursor(0, 1);
+  lcd.print("Temp:");
+  lcd.print(temperature, 1);
+  lcd.print(" C");
+
+  delay(2000);
+}
