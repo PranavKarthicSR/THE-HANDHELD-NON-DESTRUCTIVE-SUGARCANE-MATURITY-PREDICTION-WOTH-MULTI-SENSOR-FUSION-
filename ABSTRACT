@@ -1,0 +1,4 @@
+HANDHELD NON-DESTRUCTIVE SUGARCANE MATURITY PREDICTION SYSTEM USING MULTI-SENSOR FUSION
+The Handheld Non-Destructive Sugarcane Maturity Prediction System Using Multi-Sensor Fusion is an innovative agricultural technology designed to predict the maturity level of sugarcane without cutting or damaging the crop. The main objective of this project is to help farmers identify the correct harvesting time by analyzing the internal and external characteristics of sugarcane using multiple sensors.
+
+The proposed system integrates different sensors, including a Near-Infrared (NIR) Spectrometer, Colour Sensor, Laser Sensor, Temperature Sensor, and Ultrasonic Sensor, to collect important sugarcane parameters. These sensors measure spectral properties, colour variations, temperature, and physical characteristics of the sugarcane. The collected sensor data is processed using a microcontroller and a sensor fusion algorithm to estimate the maturity level.
